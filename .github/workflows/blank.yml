@@ -1,0 +1,39 @@
+name: Basic CI Workflow
+
+# Trigger the workflow on push or pull request
+on:
+  push:
+    branches:
+      - main
+      - master
+      - Michaels-Encryption
+  pull_request:
+    branches:
+      - main
+      - master
+      - Michaels-Encryption
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the code
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Step 2: Set up Node.js (adjust version if needed)
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: npm install
+        working-directory: ./Backend
+
+      # Step 4: Run tests
+      - name: Run tests
+        run: npm test
+        working-directory: ./Backend

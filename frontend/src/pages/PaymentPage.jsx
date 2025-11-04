@@ -1,10 +1,8 @@
-// frontend/src/pages/PaymentPage.jsx
 import { useState, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-  
+ 
 export default function PaymentPage() {
-  const [senderEmail, setSenderEmail] = useState('');
   const [receiverEmail, setReceiverEmail] = useState('');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('USD'); // default currency
@@ -17,66 +15,92 @@ export default function PaymentPage() {
   const [progress, setProgress] = useState(0);
   const progressRef = useRef(null);
   const nav = useNavigate();
-  const [user, setUser] = useState(() => {
+  const [user] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('currentUser')) || null;
     } catch {
       return null;
     }
   });
-
+  const [senderEmail, setSenderEmail] = useState(() => user?.email || '');
+ 
   const currencies = [
     'USD','EUR','GBP','AUD','CAD','ZAR','JPY','CNY','INR','NZD','CHF','SGD','HKD'
   ];
-
+ 
   const startProgress = () => {
     setProgress(6);
     progressRef.current = setInterval(() => {
       setProgress(p => Math.min(90, p + Math.floor(Math.random() * 8) + 4));
     }, 300);
   };
-
+ 
   const stopProgress = (final = 100) => {
     if (progressRef.current) clearInterval(progressRef.current);
     progressRef.current = null;
     setProgress(final);
     setTimeout(() => setProgress(0), 600);
   };
-
-  const submitPayment = async (e) => {
+ 
+  const handlePayment = async (e) => {
     e.preventDefault();
     if (loading) return;
-
+ 
     setStatus('');
     setStatusColor('');
-
-    // frontend validation
+ 
     if (!senderEmail || !receiverEmail || !amount || !currency || !provider || !accountInfo || !swiftCode) {
       setStatus('All fields are required.');
       setStatusColor('red');
       return;
     }
-
+ 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(senderEmail) || !emailRegex.test(receiverEmail)) {
       setStatus('Please enter valid email addresses.');
       setStatusColor('red');
       return;
     }
-
+ 
     const payload = { senderEmail, receiverEmail, amount, currency, provider, accountInfo, swiftCode };
-
+ 
     try {
       setLoading(true);
       startProgress();
-
+ 
+      // 1️⃣ Submit regular payment
       const res = await axios.post('https://localhost:5000/api/payments', payload);
-
-      stopProgress(100);
       setStatus(res.data?.message || 'Payment recorded');
       setStatusColor('green');
-
-      setTimeout(() => nav('/payment-success', { state: payload }), 400);
+ 
+      // 2️⃣ Initiate PayFast payment (fixed)
+      const payFastRes = await axios.post('https://localhost:5000/api/payfast/create', {
+        amount,
+        item_name: `Payment to ${receiverEmail}`,
+        buyer_email: senderEmail,
+      });
+ 
+      if (payFastRes.data?.url) {
+        setStatus('Opening PayFast in a new tab...');
+        setStatusColor('green');
+ 
+        // Open PayFast in new tab
+        window.open(payFastRes.data.url, '_blank', 'noopener,noreferrer');
+ 
+        // Optional: clear form fields after opening PayFast
+        setSenderEmail('');
+        setReceiverEmail('');
+        setAmount('');
+        setCurrency('USD');
+        setProvider('');
+        setAccountInfo('');
+        setSwiftCode('');
+      } else {
+        setStatus('Failed to get PayFast link.');
+        setStatusColor('red');
+      }
+ 
+      stopProgress(100);
     } catch (err) {
       stopProgress(100);
       const errorMessage = err.response?.data?.message || err.message || 'Failed to process payment';
@@ -85,24 +109,17 @@ export default function PaymentPage() {
       setStatusColor('red');
     } finally {
       setLoading(false);
-      setSenderEmail('');
-      setReceiverEmail('');
-      setAmount('');
-      setCurrency('USD');
-      setProvider('');
-      setAccountInfo('');
-      setSwiftCode('');
     }
   };
-
-  if (!user) {
+ 
+  if (!user || user?.role !== 'user') {
     return (
       <div style={{ padding: 32, textAlign: 'center' }}>
-        <h2>Please login to access the Payment Page.</h2>
+        <h2>You cannot access the Payment Page.</h2>
       </div>
     );
   }
-
+ 
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: 32, gap: 24 }}>
       <div style={{
@@ -117,10 +134,10 @@ export default function PaymentPage() {
         <p style={{ marginTop: 8, marginBottom: 18, color: '#555' }}>
           Enter the payment details below to complete your transaction.
         </p>
-
-        <form onSubmit={submitPayment} style={{ display: 'grid', gap: 14, width: '100%' }}>
+ 
+        <form onSubmit={handlePayment} style={{ display: 'grid', gap: 14, width: '100%' }}>
           <input className="form-control" type="email" placeholder="Sender Email"
-            value={senderEmail} onChange={(e) => setSenderEmail(e.target.value)} disabled={loading} />
+            value={senderEmail} onChange={(e) => setSenderEmail(e.target.value)} />
           <input className="form-control" type="email" placeholder="Receiver Email"
             value={receiverEmail} onChange={(e) => setReceiverEmail(e.target.value)} disabled={loading} />
           <input className="form-control" type="number" placeholder="Amount"
@@ -130,11 +147,11 @@ export default function PaymentPage() {
           </select>
           <input className="form-control" placeholder="Provider (SWIFT)"
             value={provider} onChange={(e) => setProvider(e.target.value)} disabled={loading} />
-          <input className="form-control" placeholder="Account Information this is reciver info "
+          <input className="form-control" placeholder="Account Information (Receiver Info)"
             value={accountInfo} onChange={(e) => setAccountInfo(e.target.value)} disabled={loading} />
           <input className="form-control" placeholder="SWIFT Code"
             value={swiftCode} onChange={(e) => setSwiftCode(e.target.value)} disabled={loading} />
-
+ 
           {progress > 0 && (
             <div className="progress" style={{ height: 10, marginTop: 8 }}>
               <div className={`progress-bar progress-bar-striped ${loading ? 'progress-bar-animated' : ''}`}
@@ -145,13 +162,13 @@ export default function PaymentPage() {
                 aria-valuemax="100" />
             </div>
           )}
-
+ 
           <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
             <button className="btn btn-primary btn-lg" style={{ flex: 1, fontSize: 18 }} type="submit" disabled={loading}>
               {loading ? 'Processing...' : 'Pay Now'}
             </button>
           </div>
-
+ 
           {status && <div style={{ color: statusColor, fontSize: 16, marginTop: 8 }}>{status}</div>}
         </form>
       </div>

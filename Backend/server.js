@@ -8,7 +8,7 @@ const https = require("https");
 const fs = require("fs");
 
 const paymentRoutes = require('./routes/paymentRoutes');
-// const payfastRoutes = require('./routes/payfast');
+const payfastRoutes = require('./routes/payfast');
 const authRoutes = require("./routes/authRoutes"); 
 const employeePaymentsRoutes = require('./routes/employeePaymentsRoutes');
 const generalLimiter = require('./middleware/rateLimiter');
@@ -82,7 +82,7 @@ app.use(generalLimiter);
 
 // Routes
 app.use('/api/payments', paymentRoutes);
-// app.use('/api/payfast', payfastRoutes);
+app.use('/api/payfast', payfastRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use('/api/employeepayments', employeePaymentsRoutes);

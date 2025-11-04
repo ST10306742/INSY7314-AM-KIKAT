@@ -113,6 +113,7 @@ router.post('/login', loginLimiter, async (req, res) => {
         accountNumber: user.accountNumber,
         idNumber: user.idNumber,
         phoneNumber: user.phoneNumber,
+        role: user.role,
       },
     });
   } catch (error) {

@@ -1,5 +1,7 @@
 // routes/employeePaymentsRoutes.js
 const express = require("express");
+const fs = require("fs");
+const path = require("path");
 const router = express.Router();
 const Payment = require("../models/Payment"); // We'll make this model next
 const User = require("../models/User");
@@ -79,5 +81,59 @@ router.post("/verify-account", async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 });
+
+
+
+// Load SWIFT codes JSON once at startup
+let swiftData = [];
+try {
+  const filePath = path.join(__dirname, "..//AllCountries_v3.json"); // adjust path if needed
+  const rawData = fs.readFileSync(filePath, "utf8");
+  swiftData = JSON.parse(rawData);
+  console.log(`✅ Loaded ${swiftData.length} SWIFT records`);
+} catch (err) {
+  console.error("⚠️ Failed to load SWIFT JSON file:", err.message);
+}
+
+
+
+// 🔹 POST /api/employeepayments/verify-swift
+router.post("/verify-swift", async (req, res) => {
+  try {
+    const { swiftCode } = req.body;
+
+    if (!swiftCode) {
+      return res.status(400).json({
+        valid: false,
+        message: "Missing SWIFT code in request body.",
+      });
+    }
+
+    // Normalize case
+    const code = swiftCode.trim().toUpperCase();
+
+    // Check if it exists in the dataset
+    const exists = swiftData.some((b) => b.bic === code);
+
+    if (exists) {
+      return res.status(200).json({
+        valid: true,
+        message: "✅ SWIFT code is valid.",
+      });
+    } else {
+      return res.status(404).json({
+        valid: false,
+        message: "❌ SWIFT code not valid or not found.",
+      });
+    }
+  } catch (error) {
+    console.error("Error verifying SWIFT code:", error);
+    res.status(500).json({
+      valid: false,
+      message: "Server error while verifying SWIFT code.",
+    });
+  }
+});
+
 
 module.exports = router;

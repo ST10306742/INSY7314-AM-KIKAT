@@ -90,9 +90,9 @@ try {
   const filePath = path.join(__dirname, "..//AllCountries_v3.json"); // adjust path if needed
   const rawData = fs.readFileSync(filePath, "utf8");
   swiftData = JSON.parse(rawData);
-  console.log(`✅ Loaded ${swiftData.length} SWIFT records`);
+  console.log(`Loaded ${swiftData.length} SWIFT records`);
 } catch (err) {
-  console.error("⚠️ Failed to load SWIFT JSON file:", err.message);
+  console.error("Failed to load SWIFT JSON file:", err.message);
 }
 
 
@@ -118,12 +118,12 @@ router.post("/verify-swift", async (req, res) => {
     if (exists) {
       return res.status(200).json({
         valid: true,
-        message: "✅ SWIFT code is valid.",
+        message: "SWIFT code is valid.",
       });
     } else {
       return res.status(404).json({
         valid: false,
-        message: "❌ SWIFT code not valid or not found.",
+        message: "SWIFT code not valid or not found.",
       });
     }
   } catch (error) {

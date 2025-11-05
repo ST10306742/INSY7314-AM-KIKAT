@@ -1,10 +1,8 @@
-// frontend/src/pages/PaymentPage.jsx
 import { useState, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 export default function PaymentPage() {
-  const [senderEmail, setSenderEmail] = useState('');
   const [receiverEmail, setReceiverEmail] = useState('');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('USD'); // default currency
@@ -25,6 +23,9 @@ export default function PaymentPage() {
     }
   });
   const [senderEmail, setSenderEmail] = useState(() => user?.email || '');
+  const [loggedInAccountNumber, setAccountNumber] = useState(() => user?.accountNumber || '');
+  console.log("Logged in user:", user?.accountNumber, user?.username);
+  const [loggedInUsername, setUsername] = useState(() => user?.username || '');
 
   const currencies = [
     'USD','EUR','GBP','AUD','CAD','ZAR','JPY','CNY','INR','NZD','CHF','SGD','HKD'
@@ -66,19 +67,28 @@ export default function PaymentPage() {
       return;
     }
 
-    const payload = { senderEmail, receiverEmail, amount, currency, provider, accountInfo, swiftCode };
+    const payload = { 
+      username: loggedInUsername, 
+      accountNumber: loggedInAccountNumber, 
+      senderEmail, 
+      receiverEmail, 
+      amount, 
+      currency, 
+      provider, 
+      accountInfo, 
+      swiftCode };
 
     try {
       setLoading(true);
       startProgress();
 
       // 1️⃣ Submit regular payment
-      const res = await axios.post('https://localhost:5000/api/payments', payload);
+      const res = await axios.post('https://localhost:5001/api/payments', payload);
       setStatus(res.data?.message || 'Payment recorded');
       setStatusColor('green');
 
       // 2️⃣ Then initiate PayFast payment
-      const payFastRes = await axios.post('https://localhost:5000/api/payfast/create', {
+      const payFastRes = await axios.post('https://localhost:5001/api/payfast/create', {
         amount,
         item_name: `Payment to ${receiverEmail}`,
         buyer_email: senderEmail,

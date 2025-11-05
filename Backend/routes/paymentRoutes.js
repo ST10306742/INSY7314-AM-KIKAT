@@ -42,6 +42,8 @@ router.post('/', async (req, res) => {
       receiverEmail,
     } = req.body;
 
+    console.log('Received payment request:', req.body);
+
     // Sanitize all fields
     const sanitized = {
       username: sanitize(username),

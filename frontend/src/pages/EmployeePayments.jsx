@@ -31,7 +31,7 @@ export default function EmployeePayments() {
     const fetchTxns = async () => {
       try {
         // use relative or absolute backend URL as in your project
-        const res = await axios.get('https://localhost:5000/api/employeepayments/getall', { headers: authHeaders });
+        const res = await axios.get('https://localhost:5001/api/employeepayments/getall', { headers: authHeaders });
         if (!mounted) return;
 
         if (Array.isArray(res.data)) {
@@ -143,7 +143,7 @@ export default function EmployeePayments() {
         receiverEmail: txn.receiverEmail || ''
       };
 
-      const res = await axios.post('https://localhost:5000/api/employeepayments/verify-account', body, { headers: authHeaders });
+      const res = await axios.post('https://localhost:5001/api/employeepayments/verify-account', body, { headers: authHeaders });
 
       const { verified = false, message: srvMsg = '' } = res.data || {};
 

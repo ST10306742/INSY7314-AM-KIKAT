@@ -136,4 +136,48 @@ router.post("/verify-swift", async (req, res) => {
 });
 
 
+// PATCH /api/employeepayments/update-verification
+router.patch("/update-verification", async (req, res) => {
+    try {
+        const { _id, accountsVerified, swiftCodeVerified } = req.body;
+
+        // Validate request
+        if (!_id || typeof accountsVerified !== "boolean" || typeof swiftCodeVerified !== "boolean") {
+            return res.status(400).json({
+                message: "Missing or invalid fields. Expected _id, accountsVerified, and swiftCodeVerified (booleans).",
+            });
+        }
+
+        // If any check fails, return unverified message
+        if (!accountsVerified || !swiftCodeVerified) {
+            return res.status(400).json({
+                verified: false,
+                message: "Unverified: one or more checks failed.",
+            });
+        }
+
+        // Update the record in MongoDB
+        const updatedPayment = await Payment.findByIdAndUpdate(
+            _id,
+            { verified: true, reason: "Verified successfully" },
+            { new: true } // return updated document
+        );
+
+        if (!updatedPayment) {
+            return res.status(404).json({ message: "Payment record not found." });
+        }
+
+        res.status(200).json({
+            message: "Payment verification status updated successfully.",
+            payment: updatedPayment,
+        });
+    } catch (error) {
+        console.error("Error updating payment verification:", error);
+        res.status(500).json({
+            message: "Server error while updating payment verification.",
+            error: error.message,
+        });
+    }
+});
+
 module.exports = router;

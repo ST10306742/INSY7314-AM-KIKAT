@@ -14,6 +14,7 @@ const UserSchema = new mongoose.Schema({
   address: { type: String },
   city: { type: String },
   postalCode: { type: String },
+
   role: { type: String, default: "user" },
   createdAt: { type: Date, default: Date.now },
 });

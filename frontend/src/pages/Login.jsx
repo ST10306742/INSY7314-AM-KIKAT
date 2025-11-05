@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import CryptoJS from 'crypto-js'; // ✅ Import CryptoJS
 
 export default function Login({ onLogin }) {
   const [username, setUsername] = useState('');
@@ -10,26 +11,53 @@ export default function Login({ onLogin }) {
   const [status, setStatus] = useState('');
   const nav = useNavigate();
 
+  //  Secret key (must match backend)
+  const SECRET_KEY = "YourStrongFrontendSecretKey123";
+
+  //  Encrypt function
+  const encryptData = (data) => {
+    return CryptoJS.AES.encrypt(data, SECRET_KEY).toString();
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     setStatus('');
+
     if (!username || !accountNumber || !password) {
       setStatus('Username, account number and password are required');
       return;
     }
 
-    const payload = { username, accountNumber, password };
+    console.log(" Original password:", password);
+
+    //  Encrypt password before sending
+    const encryptedPassword = encryptData(password);
+    console.log(" Encrypted password:", encryptedPassword);
+
+    const payload = { 
+      username, 
+      accountNumber, 
+      password: encryptedPassword 
+    };
+
+    console.log(" Payload being sent to server:", payload);
 
     try {
-      const res = await axios.post('https://localhost:5000/api/auth/login', payload);
+      const res = await axios.post('https://localhost:5001/api/auth/login', payload);
+      console.log(" Server response:", res.data);
+
       const user = res.data?.user ?? { username, accountNumber };
       onLogin(user);
-        // Save to localStorage for session persistence
-        localStorage.setItem("currentUser", JSON.stringify(user));
-        setStatus("Login successful");
+
+      // Save to localStorage for session persistence
+      localStorage.setItem("user", JSON.stringify(res.data.user));
+      localStorage.setItem("token", res.data.token); // Store JWT token
+
+
+      setStatus("Login successful");
       nav('/payments');
     } catch (err) {
-            console.error("Login error:", err);
+      console.error("❌ Login error:", err);
       setStatus('Login failed');
     }
   };

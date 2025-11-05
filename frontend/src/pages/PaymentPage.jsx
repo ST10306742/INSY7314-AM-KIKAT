@@ -1,8 +1,10 @@
+// frontend/src/pages/PaymentPage.jsx
 import { useState, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 export default function PaymentPage() {
+  const [senderEmail, setSenderEmail] = useState('');
   const [receiverEmail, setReceiverEmail] = useState('');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('USD'); // default currency

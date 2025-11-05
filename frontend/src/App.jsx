@@ -31,7 +31,7 @@ export default function App() {
 
   // backend test connectivity check
   useEffect(() => {
-    axios.get('https://localhost:5000/test')
+    axios.get('https://localhost:5001/test')
       .then(res => setTestMsg(res.data?.message ?? ''))
       .catch(() => {
         // fallback if localhost test fails
@@ -67,6 +67,16 @@ export default function App() {
 
             <div className="collapse navbar-collapse" id="navbarColor01" style={{ flex: 1 }}>
               <ul
+//   className="navbar-nav me-auto mb-2 mb-lg-0"
+//   style={{ display: 'flex', gap: 12, alignItems: 'center' }}
+// >
+//   {/* Only show Payments link if user is logged in */}
+//   {user && (
+//     <li className="nav-item">
+//       <Link className="nav-link text-white" to="/payments">Payments</Link>
+//     </li>
+//   )}
+// </ul>
                 className="navbar-nav me-auto mb-2 mb-lg-0"
                 style={{ display: 'flex', gap: 12, alignItems: 'center' }}
                 >

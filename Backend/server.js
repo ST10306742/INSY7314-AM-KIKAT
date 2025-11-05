@@ -82,30 +82,29 @@ app.use(
 
 // Routes
 app.use('/api/payments', paymentRoutes);
-app.use('/api/payfast', payfastRoutes);
+// app.use('/api/payfast', payfastRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/payments", paymentRoutes);
-app.use('/api/employeepayments', employeePaymentsRoutes);
+//app.use("/api/payfast", payfastRoutes);
 
+//  Test endpoint
+app.get("/test", (req, res) => res.json({ message: "✅ Backend is running!" }));
 
-// Test endpoint
-app.get("/test", (req, res) => res.json({ message: " Backend is running!" }));
-
-// CSP violation report (for debugging)
+//  CSP violation report (for debugging)
 app.post("/api/csp-report", (req, res) => {
-  console.warn(" CSP Violation:", JSON.stringify(req.body, null, 2));
+  console.warn("⚠️ CSP Violation:", JSON.stringify(req.body, null, 2));
   res.status(204).end();
 });
 
-// Connect MongoDB
+//  Connect MongoDB
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => console.log(" MongoDB connected"))
-  .catch((err) => console.error(" MongoDB connection error:", err));
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => console.error("❌ MongoDB connection error:", err));
 
-// Start HTTPS Server
+//  Start HTTPS Server
 https.createServer(options, app).listen(PORT, () => {
-  console.log(` Secure API running at https://localhost:${PORT}`);
-  console.log(` Frontend URL allowed: ${FRONTEND_URL}`);
-  console.log(` CSP mode: ${isProd ? "ENFORCED" : "REPORT-ONLY"}`);
+  console.log(`🔒 Secure API running at https://localhost:${PORT}`);
+  console.log(`🌐 Frontend URL allowed: ${FRONTEND_URL}`);
+  console.log(`🧱 CSP mode: ${isProd ? "ENFORCED" : "REPORT-ONLY"}`);
 });

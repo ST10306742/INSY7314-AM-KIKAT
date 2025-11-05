@@ -11,6 +11,12 @@ const PaymentSchema = new mongoose.Schema({
   swiftCode: { type: String, required: true },
   senderEmail: { type: String, required: true },
   receiverEmail: { type: String, required: true },
+
+  // This is from my branch 
+//   createdAt: { type: Date, default: Date.now },
+// });
+
+// this was from the main idk whos it is so imma leave it right here 
   verified: { type: Boolean, default: false },
   reason: { type: String,required: true },
   createdAt: { type: Date, default: Date.now },

@@ -67,16 +67,6 @@ export default function App() {
 
             <div className="collapse navbar-collapse" id="navbarColor01" style={{ flex: 1 }}>
               <ul
-//   className="navbar-nav me-auto mb-2 mb-lg-0"
-//   style={{ display: 'flex', gap: 12, alignItems: 'center' }}
-// >
-//   {/* Only show Payments link if user is logged in */}
-//   {user && (
-//     <li className="nav-item">
-//       <Link className="nav-link text-white" to="/payments">Payments</Link>
-//     </li>
-//   )}
-// </ul>
                 className="navbar-nav me-auto mb-2 mb-lg-0"
                 style={{ display: 'flex', gap: 12, alignItems: 'center' }}
                 >

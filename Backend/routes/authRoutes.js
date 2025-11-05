@@ -11,7 +11,7 @@ const SECRET_KEY = "YourStrongFrontendSecretKey123"; // Must match frontend AES 
 // 🕒 Rate limiter to prevent brute force login attempts
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,
+  max: 400,
   message: {
     status: 429,
     message: "Too many login attempts. Please try again later.",

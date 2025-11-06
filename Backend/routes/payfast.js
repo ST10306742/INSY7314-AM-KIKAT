@@ -1,4 +1,3 @@
-// Backend/routes/payfast.js
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
@@ -10,7 +9,7 @@ const PF_MERCHANT_KEY = process.env.PF_MERCHANT_KEY;
 const PF_PASSPHRASE = process.env.PF_PASSPHRASE || '';
 const PF_URL = 'https://sandbox.payfast.co.za/eng/process';
 
-// Correct signature generation (PayFast exact format)
+// Generate PayFast signature
 function generateSignature(data) {
   const sortedKeys = Object.keys(data).sort();
   const queryString = sortedKeys
@@ -24,6 +23,7 @@ function generateSignature(data) {
   return crypto.createHash('md5').update(fullString).digest('hex');
 }
 
+// Create PayFast sandbox URL
 router.post('/create', async (req, res) => {
   try {
     const { amount, item_name, buyer_email } = req.body;
@@ -33,15 +33,15 @@ router.post('/create', async (req, res) => {
     }
 
     const data = {
-    merchant_id: PF_MERCHANT_ID,
-    merchant_key: PF_MERCHANT_KEY,
-     return_url: 'https://localhost:5173/payment-success',  // your frontend
-  cancel_url: 'https://localhost:5173/payment-cancel',   // your frontend
-  notify_url: 'https://localhost:5001/api/payfast/notify', // your backend for server notification
-    amount: parseFloat(amount).toFixed(2),
-    item_name,
-    email_address: buyer_email,
-    m_payment_id: 'TEST-' + Date.now(),
+      merchant_id: PF_MERCHANT_ID,
+      merchant_key: PF_MERCHANT_KEY,
+      return_url: 'https://localhost:5173/payment-success',
+      cancel_url: 'https://localhost:5173/payment-cancel',
+      notify_url: 'https://localhost:5000/api/payfast/notify',
+      amount: parseFloat(amount).toFixed(2),
+      item_name,
+      email_address: buyer_email,
+      m_payment_id: 'TEST-' + Date.now(),
     };
 
     const signature = generateSignature(data);
@@ -53,12 +53,13 @@ router.post('/create', async (req, res) => {
       Object.entries(data)
         .map(([key, val]) => `${key}=${encodeURIComponent(val)}`)
         .join('&');
-console.log('Generated PayFast URL:', pfUrl);
+
+    console.log('Generated PayFast URL:', pfUrl);
+
     return res.json({
       message: 'PayFast sandbox link generated successfully.',
       url: pfUrl,
     });
-    
   } catch (err) {
     console.error('PayFast error:', err);
 
@@ -74,27 +75,13 @@ console.log('Generated PayFast URL:', pfUrl);
         subject: 'Payment processing failed (PayFast)',
         text: `Error: ${err.message}`,
       });
-      console.log(' Error email sent');
+      console.log('Error email sent');
     } catch (mailErr) {
       console.error('Email send error:', mailErr);
     }
 
     res.status(500).json({ message: 'Payment failed, email sent.' });
-    console.log('Generated PayFast URL:', pfUrl);
   }
 });
-
-function generateSignature(data) {
-  const sortedKeys = Object.keys(data).sort();
-  const queryString = sortedKeys
-    .map((key) => `${key}=${encodeURIComponent(data[key]).replace(/%20/g, '+')}`)
-    .join('&');
-
-  const fullString = PF_PASSPHRASE
-    ? `${queryString}&passphrase=${encodeURIComponent(PF_PASSPHRASE)}`
-    : queryString;
-
-  return crypto.createHash('md5').update(fullString).digest('hex');
-}
 
 module.exports = router;

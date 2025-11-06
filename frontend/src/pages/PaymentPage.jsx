@@ -32,7 +32,23 @@ export default function PaymentPage() {
     'USD','EUR','GBP','AUD','CAD','ZAR','JPY','CNY','INR','NZD','CHF','SGD','HKD'
   ];
 
-  // Progress bar handlers
+  // Hardcoded conversion rates to ZAR
+  const conversionRates = {
+    USD: 19,  // example rate
+    EUR: 20,
+    GBP: 23,
+    AUD: 13,
+    CAD: 14,
+    ZAR: 1,
+    JPY: 0.14,
+    CNY: 2.7,
+    INR: 0.23,
+    NZD: 12,
+    CHF: 21,
+    SGD: 15,
+    HKD: 2.5
+  };
+
   const startProgress = () => {
     setProgress(6);
     progressRef.current = setInterval(() => {
@@ -86,6 +102,42 @@ export default function PaymentPage() {
       setLoading(true);
       startProgress();
 
+      //Submit regular payment
+      const res = await axios.post('https://localhost:5000/api/payments', payload);
+      setStatus(res.data?.message || 'Payment recorded');
+      setStatusColor('green');
+
+      //Convert amount to ZAR for PayFast
+      const amountInZAR = (amount * (conversionRates[currency] || 1)).toFixed(2);
+
+      //Initiate PayFast payment
+      const payFastRes = await axios.post('https://localhost:5000/api/payfast/create', {
+        amount: amountInZAR,
+        item_name: `Payment to ${receiverEmail}`,
+        buyer_email: senderEmail,
+      });
+
+      if (payFastRes.data?.url) {
+        setStatus('Opening PayFast in a new tab...');
+        setStatusColor('green');
+
+        // Open PayFast in new tab
+        window.open(payFastRes.data.url, '_blank', 'noopener,noreferrer');
+
+        // Clear form fields
+        setSenderEmail('');
+        setReceiverEmail('');
+        setAmount('');
+        setCurrency('USD');
+        setProvider('');
+        setAccountInfo('');
+        setSwiftCode('');
+      } else {
+        setStatus('Failed to get PayFast link.');
+        setStatusColor('red');
+      }
+
+      stopProgress(100);
       // Submit regular payment
       const res = await axios.post('https://localhost:5001/api/payments', payload, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       setStatus(res.data?.message || 'Payment recorded');
@@ -116,13 +168,6 @@ export default function PaymentPage() {
       setStatusColor('red');
     } finally {
       setLoading(false);
-      setSenderEmail('');
-      setReceiverEmail('');
-      setAmount('');
-      setCurrency('USD');
-      setProvider('');
-      setAccountInfo('');
-      setSwiftCode('');
     }
   };
 

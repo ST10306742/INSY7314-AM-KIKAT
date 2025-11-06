@@ -133,18 +133,7 @@ router.post('/login',
 
       res.status(200).json({
         message: "Login successful",
-        token,
-        user: {
-          id: user._id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-          username: user.username,
-          accountNumber: user.accountNumber,
-          idNumber: user.idNumber,
-          phoneNumber: user.phoneNumber,
-          role: user.role
-        },
+        token
       });
     } catch (error) {
       console.error("Login error:", error);

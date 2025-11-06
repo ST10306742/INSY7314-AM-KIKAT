@@ -5,13 +5,14 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const helmet = require("helmet");
 const https = require("https");
+const seedEmployees = require("./seed/seedEmployees");
 const fs = require("fs");
 
 const paymentRoutes = require('./routes/paymentRoutes');
-// const payfastRoutes = require('./routes/payfast');
-const authRoutes = require("./routes/authRoutes"); 
+const payfastRoutes = require('./routes/payfast');
+const authRoutes = require("./routes/authRoutes");
 const employeePaymentsRoutes = require('./routes/employeePaymentsRoutes');
-const generalLimiter = require('./middleware/rateLimiter');
+//const generalLimiter = require('./middleware/rateLimiter');
 
 dotenv.config();
 
@@ -77,12 +78,12 @@ app.use(
 );
 
 // Rate Limiting
-app.use(generalLimiter);
+//app.use(generalLimiter);
 
 
 // Routes
 app.use('/api/payments', paymentRoutes);
-// app.use('/api/payfast', payfastRoutes);
+app.use('/api/payfast', payfastRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use('/api/employeepayments', employeePaymentsRoutes);
@@ -100,7 +101,10 @@ app.post("/api/csp-report", (req, res) => {
 // Connect MongoDB
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => console.log(" MongoDB connected"))
+  .then(async () => {
+    console.log(" MongoDB connected");
+    await seedEmployees();
+  })
   .catch((err) => console.error(" MongoDB connection error:", err));
 
 // Start HTTPS Server

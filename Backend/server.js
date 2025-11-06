@@ -26,6 +26,8 @@ const isProd = NODE_ENV === "production";
 const options = {
   key: process.env.SSL_KEY,
   cert: process.env.SSL_CERT,
+  minVersion: 'TLSv1.2', // only allow TLS 1.2+
+  maxVersion: 'TLSv1.3', // cap at TLS 1.3
 };
 
 // Initialize Express app
@@ -108,8 +110,14 @@ mongoose
   .catch((err) => console.error(" MongoDB connection error:", err));
 
 // Start HTTPS Server
-https.createServer(options, app).listen(PORT, () => {
-  console.log(` Secure API running at https://localhost:${PORT}`);
-  console.log(` Frontend URL allowed: ${FRONTEND_URL}`);
-  console.log(` CSP mode: ${isProd ? "ENFORCED" : "REPORT-ONLY"}`);
+const server = https.createServer(options, app);
+
+server.on('secureConnection', (tlsSocket) => {
+  console.log(`🔐 Client connected using TLS version: ${tlsSocket.getProtocol()}`);
+});
+
+server.listen(PORT, () => {
+  console.log(`✅ Secure API running at https://localhost:${PORT}`);
+  console.log(`Frontend URL allowed: ${FRONTEND_URL}`);
+  console.log(`CSP mode: ${isProd ? 'ENFORCED' : 'REPORT-ONLY'}`);
 });

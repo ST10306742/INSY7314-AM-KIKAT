@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
- 
+
 export default function PaymentPage() {
   const [receiverEmail, setReceiverEmail] = useState('');
   const [amount, setAmount] = useState('');
@@ -23,71 +23,91 @@ export default function PaymentPage() {
     }
   });
   const [senderEmail, setSenderEmail] = useState(() => user?.email || '');
- 
+
   const currencies = [
     'USD','EUR','GBP','AUD','CAD','ZAR','JPY','CNY','INR','NZD','CHF','SGD','HKD'
   ];
- 
+
+  // Hardcoded conversion rates to ZAR
+  const conversionRates = {
+    USD: 19,  // example rate
+    EUR: 20,
+    GBP: 23,
+    AUD: 13,
+    CAD: 14,
+    ZAR: 1,
+    JPY: 0.14,
+    CNY: 2.7,
+    INR: 0.23,
+    NZD: 12,
+    CHF: 21,
+    SGD: 15,
+    HKD: 2.5
+  };
+
   const startProgress = () => {
     setProgress(6);
     progressRef.current = setInterval(() => {
       setProgress(p => Math.min(90, p + Math.floor(Math.random() * 8) + 4));
     }, 300);
   };
- 
+
   const stopProgress = (final = 100) => {
     if (progressRef.current) clearInterval(progressRef.current);
     progressRef.current = null;
     setProgress(final);
     setTimeout(() => setProgress(0), 600);
   };
- 
+
   const handlePayment = async (e) => {
     e.preventDefault();
     if (loading) return;
- 
+
     setStatus('');
     setStatusColor('');
- 
+
     if (!senderEmail || !receiverEmail || !amount || !currency || !provider || !accountInfo || !swiftCode) {
       setStatus('All fields are required.');
       setStatusColor('red');
       return;
     }
- 
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(senderEmail) || !emailRegex.test(receiverEmail)) {
       setStatus('Please enter valid email addresses.');
       setStatusColor('red');
       return;
     }
- 
+
     const payload = { senderEmail, receiverEmail, amount, currency, provider, accountInfo, swiftCode };
- 
+
     try {
       setLoading(true);
       startProgress();
- 
+
       // 1️⃣ Submit regular payment
       const res = await axios.post('https://localhost:5000/api/payments', payload);
       setStatus(res.data?.message || 'Payment recorded');
       setStatusColor('green');
- 
-      // 2️⃣ Initiate PayFast payment (fixed)
+
+      // 2️⃣ Convert amount to ZAR for PayFast
+      const amountInZAR = (amount * (conversionRates[currency] || 1)).toFixed(2);
+
+      // 3️⃣ Initiate PayFast payment
       const payFastRes = await axios.post('https://localhost:5000/api/payfast/create', {
-        amount,
+        amount: amountInZAR,
         item_name: `Payment to ${receiverEmail}`,
         buyer_email: senderEmail,
       });
- 
+
       if (payFastRes.data?.url) {
         setStatus('Opening PayFast in a new tab...');
         setStatusColor('green');
- 
+
         // Open PayFast in new tab
         window.open(payFastRes.data.url, '_blank', 'noopener,noreferrer');
- 
-        // Optional: clear form fields after opening PayFast
+
+        // Clear form fields
         setSenderEmail('');
         setReceiverEmail('');
         setAmount('');
@@ -99,7 +119,7 @@ export default function PaymentPage() {
         setStatus('Failed to get PayFast link.');
         setStatusColor('red');
       }
- 
+
       stopProgress(100);
     } catch (err) {
       stopProgress(100);
@@ -111,7 +131,7 @@ export default function PaymentPage() {
       setLoading(false);
     }
   };
- 
+
   if (!user || user?.role !== 'user') {
     return (
       <div style={{ padding: 32, textAlign: 'center' }}>
@@ -119,7 +139,7 @@ export default function PaymentPage() {
       </div>
     );
   }
- 
+
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: 32, gap: 24 }}>
       <div style={{
@@ -134,7 +154,7 @@ export default function PaymentPage() {
         <p style={{ marginTop: 8, marginBottom: 18, color: '#555' }}>
           Enter the payment details below to complete your transaction.
         </p>
- 
+
         <form onSubmit={handlePayment} style={{ display: 'grid', gap: 14, width: '100%' }}>
           <input className="form-control" type="email" placeholder="Sender Email"
             value={senderEmail} onChange={(e) => setSenderEmail(e.target.value)} />
@@ -151,7 +171,7 @@ export default function PaymentPage() {
             value={accountInfo} onChange={(e) => setAccountInfo(e.target.value)} disabled={loading} />
           <input className="form-control" placeholder="SWIFT Code"
             value={swiftCode} onChange={(e) => setSwiftCode(e.target.value)} disabled={loading} />
- 
+
           {progress > 0 && (
             <div className="progress" style={{ height: 10, marginTop: 8 }}>
               <div className={`progress-bar progress-bar-striped ${loading ? 'progress-bar-animated' : ''}`}
@@ -162,13 +182,13 @@ export default function PaymentPage() {
                 aria-valuemax="100" />
             </div>
           )}
- 
+
           <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
             <button className="btn btn-primary btn-lg" style={{ flex: 1, fontSize: 18 }} type="submit" disabled={loading}>
               {loading ? 'Processing...' : 'Pay Now'}
             </button>
           </div>
- 
+
           {status && <div style={{ color: statusColor, fontSize: 16, marginTop: 8 }}>{status}</div>}
         </form>
       </div>

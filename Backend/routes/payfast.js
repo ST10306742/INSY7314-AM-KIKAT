@@ -37,7 +37,7 @@ router.post('/create', async (req, res) => {
     merchant_key: PF_MERCHANT_KEY,
      return_url: 'https://localhost:5173/payment-success',  // your frontend
   cancel_url: 'https://localhost:5173/payment-cancel',   // your frontend
-  notify_url: 'https://localhost:5000/api/payfast/notify', // your backend for server notification
+  notify_url: 'https://localhost:5001/api/payfast/notify', // your backend for server notification
     amount: parseFloat(amount).toFixed(2),
     item_name,
     email_address: buyer_email,

@@ -13,6 +13,7 @@
     "axios": "^1.13.1",
     "bootstrap": "^5.3.8",
     "bootswatch": "^5.3.8",
+    "jwt-decode": "^4.0.0",
     "lint": "^1.1.2",
     "react": "^19.2.0",
     "react-bootstrap": "^2.10.10",

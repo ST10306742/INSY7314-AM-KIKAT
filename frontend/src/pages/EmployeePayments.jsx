@@ -2,23 +2,22 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
+// Employee Payments Page for reviewing, verifying, and submitting payments to SWIFT
 export default function EmployeePayments() {
   const nav = useNavigate();
-  const [txns, setTxns] = useState([]);
+  const [transactions, setTransactions] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
-  const [loadingIds, setLoadingIds] = useState([]); // ids currently in-flight
+  const [loadingIds, setLoadingIds] = useState([]);
   const [message, setMessage] = useState('');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [sortField, setSortField] = useState('createdAt');
-  const [sortDir, setSortDir] = useState('desc'); // 'asc' | 'desc'
+  const [sortDir, setSortDir] = useState('desc'); //Ascending or descending
   const debounceRef = useRef(null);
+  const [status, setStatus] = useState({ type: "", message: "" });
 
-  const currentUser = (() => {
-    try { return JSON.parse(localStorage.getItem('currentUser')); } catch { return null; }
-  })();
-
-  const authHeaders = currentUser?.token ? { Authorization: `Bearer ${currentUser.token}` } : {};
+  //JWT token that contains all the user information for admins, also allows access to employee page
+  const authHeaders = { Authorization: `Bearer ${localStorage.getItem('token')}` };
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -28,12 +27,13 @@ export default function EmployeePayments() {
 
   useEffect(() => {
     let mounted = true;
-    const fetchTxns = async () => {
+    const fetchTransactions = async () => {
       try {
-        // use relative or absolute backend URL as in your project
+        // Fetch employee payments from backend
         const res = await axios.get('https://localhost:5001/api/employeepayments/getall', { headers: authHeaders });
         if (!mounted) return;
 
+        //returned data is normalized for table
         if (Array.isArray(res.data)) {
           const normalized = res.data.map(p => ({
             id: p._id || p.id,
@@ -51,36 +51,44 @@ export default function EmployeePayments() {
             accountValid: null,
             swiftValid: null,
             submitted: !!p.submitted,
-            createdAt: p.createdAt ? new Date(p.createdAt) : new Date(p._id ? undefined : Date.now())
+            swiftResponse: p.swiftResponse || null,
+            createdAt: p.createdAt ? new Date(p.createdAt) : new Date()
           }));
-          setTxns(normalized);
+          setTransactions(normalized);
           return;
         }
       } catch (err) {
         console.warn('Could not fetch employee payments from backend.', err?.message);
+        setStatus({ type: 'error', message: 'Failed to load payments: ' + (err?.response?.data?.message || err.message) });
       }
     };
 
-    fetchTxns();
+    fetchTransactions();
     return () => { mounted = false; };
-  }, []); // authHeaders may be added to deps if tokens change
+  }, []);
 
-  const updateTxn = (id, patch) => {
-    setTxns(txs => txs.map(t => t.id === id ? { ...t, ...patch } : t));
+  // State helpers
+  const updateTransaction = (id, patch) => {
+    setTransactions(txs => txs.map(t => t.id === id ? { ...t, ...patch } : t));
   };
 
   const setLoading = (id, on = true) => {
     setLoadingIds(ids => on ? Array.from(new Set([...ids, id])) : ids.filter(i => i !== id));
   };
 
-  // filtering across all fields using single text box
+  //status message
+  const showStatus = (type, msg) => {
+    setStatus({ type, message: msg });
+    setMessage(msg);
+    setTimeout(() => setStatus({ type: "", message: "" }), 5000);
+  };
+
+  // Filtered and sorted view
   const displayed = useMemo(() => {
     const q = (debouncedQuery || '').toLowerCase();
-    let items = txns;
-
+    let items = transactions;
     if (q) {
       items = items.filter(t => {
-        // check string fields plus amount and createdAt ISO/local string
         const checks = [
           t.username,
           t.accountNumber,
@@ -94,119 +102,146 @@ export default function EmployeePayments() {
           t.reason,
           t.createdAt ? t.createdAt.toISOString() : ''
         ].filter(Boolean).map(s => String(s).toLowerCase());
-
         return checks.some(s => s.includes(q));
       });
     }
-
-    // sorting
     const dir = sortDir === 'asc' ? 1 : -1;
     items = [...items].sort((a, b) => {
       const A = a[sortField];
       const B = b[sortField];
-
-      // handle createdAt as Date
       if (sortField === 'createdAt') {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return (ta - tb) * dir;
       }
-
-      // numeric compare for amount
       if (sortField === 'amount') {
         return (Number(A || 0) - Number(B || 0)) * dir;
       }
-
-      // fallback string compare
       const sa = (A || '').toString().toLowerCase();
       const sb = (B || '').toString().toLowerCase();
       if (sa < sb) return -1 * dir;
       if (sa > sb) return 1 * dir;
       return 0;
     });
-
     return items;
-  }, [txns, debouncedQuery, sortField, sortDir]);
+  }, [transactions, debouncedQuery, sortField, sortDir]);
 
-  // Use the provided POST /verify-account route to validate account/receiver/sender
-  const checkRecord = async (txn) => {
+  //backend calls
+  const verifyAccount = async (transaction) => {
+    const body = {
+      accountNumber: transaction.accountNumber || '',
+      senderEmail: transaction.senderEmail || '',
+      accountInfo: transaction.accountInfo || '',
+      receiverEmail: transaction.receiverEmail || ''
+    };
+    //post to backend verify-account endpoint
+    const res = await axios.post('https://localhost:5001/api/employeepayments/verify-account', body, { headers: authHeaders });
+    return res.data;
+  };
+
+  //swift verification backend call
+  const verifySwift = async (swiftCode) => {
+    const res = await axios.post('https://localhost:5001/api/employeepayments/verify-swift', { swiftCode }, { headers: authHeaders });
+    return res.data;
+  };
+
+  //persist verification to backend
+  const persistVerification = async (transaction) => {
+    const body = {
+      _id: transaction.id,
+      accountsVerified: !!transaction.accountValid,
+      swiftCodeVerified: !!transaction.swiftValid
+    };
+    const res = await axios.patch('https://localhost:5001/api/employeepayments/update-verification', body, { headers: authHeaders });
+    return res.data;
+  };
+
+  //persist unverify to backend
+  const persistUnverify = async (transaction) => {
+    const res = await axios.patch('https://localhost:5001/api/employeepayments/unverify', { _id: transaction.id }, { headers: authHeaders });
+    return res.data;
+  };
+
+  //Combined check handler
+  const checkRecord = async (transaction) => {
     setMessage('');
-    setLoading(txn.id, true);
-
-    updateTxn(txn.id, { accountValid: null, swiftValid: null });
-
+    setLoading(transaction.id, true);
+    updateTransaction(transaction.id, { accountValid: null, swiftValid: null });
     try {
-      const body = {
-        accountNumber: txn.accountNumber || '',
-        senderEmail: txn.senderEmail || '',
-        accountInfo: txn.accountInfo || '',
-        receiverEmail: txn.receiverEmail || ''
-      };
-
-      const res = await axios.post('https://localhost:5001/api/employeepayments/verify-account', body, { headers: authHeaders });
-
-      const { verified = false, message: srvMsg = '' } = res.data || {};
-
-      if (verified) {
-        updateTxn(txn.id, { accountValid: true, swiftValid: true, verified: true });
-        setMessage(srvMsg || 'Sender and receiver verified.');
-      } else {
-        updateTxn(txn.id, { accountValid: false, swiftValid: false, verified: false });
-        setMessage(srvMsg || 'Verification failed.');
-      }
+      const accountRes = await verifyAccount(transaction);
+      const accountsOk = !!accountRes.verified;
+      let swiftOk = false;
+      try {
+        const swiftRes = await verifySwift(transaction.swiftCode || '');
+        swiftOk = !!swiftRes.valid;
+      } catch (e) { swiftOk = false; }
+      updateTransaction(transaction.id, { accountValid: accountsOk, swiftValid: swiftOk });
+      showStatus(accountsOk && swiftOk ? 'success' : 'info', accountRes.message || (accountsOk && swiftOk ? 'Checks passed — click Submit to SWIFT to persist and submit.' : 'Checks completed'));
     } catch (err) {
-      const status = err.response?.status;
       const srvMsg = err.response?.data?.message || err.message || 'Verification failed';
-      const lower = (srvMsg || '').toLowerCase();
-      let accountValid = null, swiftValid = null;
-
-      if (status === 404) {
-        if (lower.includes('sender')) accountValid = false;
-        if (lower.includes('receiver')) swiftValid = false;
-      } else if (status === 400) {
-        if (lower.includes('sender') || lower.includes('account number does not match')) accountValid = false;
-        if (lower.includes('receiver') || lower.includes('does not match records')) swiftValid = false;
-      }
-
-      if (accountValid === null && swiftValid === null) {
-        accountValid = false;
-        swiftValid = false;
-      }
-
-      updateTxn(txn.id, { accountValid, swiftValid, verified: false });
-      setMessage(srvMsg);
+      updateTransaction(transaction.id, { accountValid: false, swiftValid: false, verified: false });
+      showStatus('error', srvMsg);
     } finally {
-      setLoading(txn.id, false);
+      setLoading(transaction.id, false);
     }
   };
 
-  // the rest of action handlers unchanged (toggleVerify, submitToSwift, bulkSubmit)...
-  const toggleVerify = async (txn) => {
+  //submit single (uses update-verification endpoint per API)
+  const submitToSwift = async (transaction) => {
     setMessage('');
-    if (txn.accountValid === null || txn.swiftValid === null) {
-      setMessage('Run checks first before toggling verification.');
+    if (!transaction.accountValid || !transaction.swiftValid || !transaction.verified) {
+      showStatus('error', 'Payment must be verified before submission.');
       return;
     }
-    const newVerified = !txn.verified;
-    updateTxn(txn.id, { verified: newVerified });
-    setMessage(newVerified ? 'Marked verified (local change)' : 'Verification removed (local change)');
-  };
-
-  const submitToSwift = async (txn) => {
-    setMessage('');
-    if (!txn.verified) {
-      setMessage('Only verified transactions can be submitted to SWIFT.');
-      return;
-    }
-    setLoading(txn.id, true);
+    setLoading(transaction.id, true);
     try {
-      updateTxn(txn.id, { submitted: true, swiftResponse: { simulated: true } });
-      setMessage('Submitted to SWIFT (simulated). Implement server-side submit endpoint to persist.');
+      const res = await persistVerification(transaction);
+      const updated = res.payment;
+      updateTransaction(transaction.id, { submitted: true, swiftResponse: updated.swiftResponse, reason: updated.reason });
+      showStatus('success', res.message || 'Payment submitted to SWIFT.');
     } catch (err) {
       const errMsg = err.response?.data?.message || err.message || 'Failed to submit to SWIFT';
-      setMessage(errMsg);
+      showStatus('error', errMsg);
     } finally {
-      setLoading(txn.id, false);
+      setLoading(transaction.id, false);
+    }
+  };
+
+  //mark verified handler
+  const handleMarkVerified = async (transaction) => {
+    setMessage('');
+    if (!(transaction.accountValid && transaction.swiftValid)) {
+      showStatus('error', 'Run both checks and ensure they pass before marking verified.');
+      return;
+    }
+    setLoading(transaction.id, true);
+    try {
+      const res = await persistVerification(transaction);
+      const updated = res.payment;
+      updateTransaction(transaction.id, { verified: !!updated.verified, reason: updated.reason || transaction.reason, createdAt: updated.createdAt ? new Date(updated.createdAt) : transaction.createdAt });
+      showStatus('success', res.message || 'Verified and persisted.');
+    } catch (err) {
+      const srvMsg = err.response?.data?.message || err.message || 'Failed to persist verification';
+      showStatus('error', srvMsg);
+    } finally {
+      setLoading(transaction.id, false);
+    }
+  };
+
+  //mark unverified handler
+  const handleUnverify = async (transaction) => {
+    setMessage('');
+    setLoading(transaction.id, true);
+    try {
+      const res = await persistUnverify(transaction);
+      const updated = res.payment;
+      updateTransaction(transaction.id, { verified: !!updated.verified, reason: updated.reason || transaction.reason, accountValid: null, swiftValid: null, submitted: !!updated.submitted });
+      showStatus('success', res.message || 'Unverified and persisted.');
+    } catch (err) {
+      const srvMsg = err.response?.data?.message || err.message || 'Failed to unverify';
+      showStatus('error', srvMsg);
+    } finally {
+      setLoading(transaction.id, false);
     }
   };
 
@@ -214,27 +249,97 @@ export default function EmployeePayments() {
     setSelectedIds(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
   };
 
+  //Bulk submit sequentially via backend
   const bulkSubmit = async () => {
     setMessage('');
-    const toSubmit = txns.filter(t => selectedIds.includes(t.id) && t.verified && !t.submitted);
+    const toSubmit = transactions.filter(t => selectedIds.includes(t.id) && t.accountValid && t.swiftValid && !t.submitted);
     if (!toSubmit.length) {
-      setMessage('No verified selections to submit.');
+      showStatus('info', 'No verified selections to submit.');
       return;
     }
+
     for (const t of toSubmit) {
       setLoading(t.id, true);
       try {
-        updateTxn(t.id, { submitted: true, swiftResponse: { simulated: true } });
-      } catch {
-        updateTxn(t.id, { submitted: false });
+        const persistRes = await persistVerification(t);
+        const updatedPayment = persistRes.payment;
+        updateTransaction(t.id, { verified: !!updatedPayment.verified, submitted: !!updatedPayment.submitted || true, createdAt: updatedPayment.createdAt ? new Date(updatedPayment.createdAt) : t.createdAt });
+        showStatus('success', `Persisted ${t.id}`);
+      } catch (err) {
+        updateTransaction(t.id, { submitted: false });
+        const errMsg = err.response?.data?.message || err.message || `Failed to persist ${t.id}`;
+        showStatus('error', errMsg);
       } finally {
         setLoading(t.id, false);
       }
     }
+
     setSelectedIds([]);
-    setMessage(`Bulk submit simulated for ${toSubmit.length} transaction(s).`);
+    showStatus('success', `Marked ${toSubmit.length} transaction(s) verified/submitted.`);
   };
 
+  //Bulk delete backend call
+  const bulkDeleteBackend = async (ids) => {
+    const res = await axios.post('https://localhost:5001/api/employeepayments/delete-multiple', { ids }, { headers: authHeaders, timeout: 20000 });
+    return res.data;
+  };
+
+  const deletePaymentBackend = async (transactionId) => {
+    const res = await axios.delete('https://localhost:5001/api/employeepayments/delete', {
+      headers: authHeaders,
+      data: { _id: transactionId },
+      timeout: 20000
+    });
+    return res.data;
+  };
+
+  //Single delete handler (existing)
+  const handleDelete = async (transaction) => {
+    if (!transaction || !transaction.id) return;
+    const ok = window.confirm(`Delete transaction ${transaction.id}? This action cannot be undone.`);
+    if (!ok) return;
+    setLoading(transaction.id, true);
+    try {
+      const res = await deletePaymentBackend(transaction.id);
+      setTransactions(prev => prev.filter(t => t.id !== transaction.id));
+      setSelectedIds(prev => prev.filter(id => id !== transaction.id));
+      showStatus('success', res.message || 'Transaction deleted.');
+    } catch (err) {
+      const errMsg = err.response?.data?.message || err.message || 'Failed to delete transaction';
+      showStatus('error', errMsg);
+    } finally {
+      setLoading(transaction.id, false);
+    }
+  };
+
+  //Bulk delete handler
+  const handleBulkDelete = async () => {
+    if (!selectedIds.length) {
+      showStatus('info', 'No selections to delete.');
+      return;
+    }
+    const ok = window.confirm(`Delete ${selectedIds.length} transaction(s)? This action cannot be undone.`);
+    if (!ok) return;
+
+    //mark all selected as loading
+    selectedIds.forEach(id => setLoading(id, true));
+
+    try {
+      const res = await bulkDeleteBackend(selectedIds);
+      //remove deleted from local state
+      setTransactions(prev => prev.filter(t => !selectedIds.includes(t.id)));
+      setSelectedIds([]);
+      showStatus('success', res.message || `Deleted ${res.deletedCount || selectedIds.length} transaction(s).`);
+    } catch (err) {
+      const errMsg = err.response?.data?.message || err.message || 'Failed to delete selected transactions';
+      showStatus('error', errMsg);
+    } finally {
+      //unset loading for all
+      selectedIds.forEach(id => setLoading(id, false));
+    }
+  };
+
+  //Format status cell
   const formatStatus = ({ accountValid, swiftValid, verified, submitted }) => {
     if (submitted) return { text: 'Submitted', color: 'green' };
     if (verified) return { text: 'Verified', color: 'green' };
@@ -243,10 +348,33 @@ export default function EmployeePayments() {
     return { text: 'Mismatch', color: 'red' };
   };
 
+  //styles
+  const cellStyle = { maxWidth: 220, wordBreak: 'break-word', whiteSpace: 'normal', overflowWrap: 'break-word' };
+  const smallCell = { maxWidth: 120, wordBreak: 'break-word', whiteSpace: 'normal', overflowWrap: 'break-word' };
+
+  const bannerText = status.message || message || '';
+  const bannerColor = status.type === 'error' || (message && /fail|error|failed/i.test(message)) ? '#ffe6e6' : status.type === 'success' || (message && /success|submitted|persisted|saved|ok/i.test(message)) ? '#e9ffed' : '#fff7e6';
+  const bannerBorder = status.type === 'error' ? '#ff4d4f' : status.type === 'success' ? '#2ecc71' : '#ffcc66';
+
+  //frontend UI
   return (
     <div style={{ padding: 24 }}>
       <h2>International Payments — Employee Portal</h2>
       <p style={{ color: '#666' }}>Review incoming transactions, validate payee account & SWIFT, verify and submit to SWIFT.</p>
+
+      {bannerText ? (
+        <div style={{
+          marginBottom: 12,
+          padding: '10px 14px',
+          background: bannerColor,
+          borderLeft: `6px solid ${bannerBorder}`,
+          borderRadius: 6,
+          color: '#222',
+          fontWeight: 600,
+        }}>
+          {bannerText}
+        </div>
+      ) : null}
 
       <div style={{ marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
         <input
@@ -275,57 +403,80 @@ export default function EmployeePayments() {
           Clear
         </button>
 
-        <div style={{ marginLeft: 'auto', color: '#333' }}>{message}</div>
+        <button className="btn btn-sm btn-primary" onClick={bulkSubmit} disabled={!selectedIds.length}>
+          Submit Selected
+        </button>
+
+        <button className="btn btn-sm btn-danger" onClick={handleBulkDelete} disabled={!selectedIds.length}>
+          Delete Selected
+        </button>
+
+        <div style={{ marginLeft: 'auto', color: '#333' }}>{/* lightweight inline status */}</div>
       </div>
 
-      <table className="table table-striped">
+      <table className="table table-striped" style={{ tableLayout: 'fixed' }}>
         <thead>
           <tr>
             <th style={{ width: 36 }}></th>
-            <th>ID</th>
-            <th>Date</th>
-            <th>Sender</th>
-            <th>Receiver</th>
-            <th>Amount</th>
-            <th>Provider</th>
-            <th>Account Info</th>
-            <th>SWIFT</th>
-            <th>Status</th>
+            <th style={{ width: 120 }}>ID</th>
+            <th style={{ width: 160 }}>Date</th>
+            <th style={{ width: 180 }}>Sender</th>
+            <th style={{ width: 200 }}>Receiver</th>
+            <th style={{ width: 120 }}>Amount</th>
+            <th style={{ width: 140 }}>Provider</th>
+            <th style={{ width: 260 }}>Account Info</th>
+            <th style={{ width: 160 }}>SWIFT</th>
+            <th style={{ width: 120 }}>Status</th>
             <th style={{ minWidth: 260 }}>Actions</th>
           </tr>
         </thead>
         <tbody>
-          {displayed.map(txn => {
-            const st = formatStatus(txn);
-            const isLoading = loadingIds.includes(txn.id);
+          {displayed.map(transaction => {
+            const st = formatStatus(transaction);
+            const isLoading = loadingIds.includes(transaction.id);
             return (
-              <tr key={txn.id}>
-                <td><input type="checkbox" checked={selectedIds.includes(txn.id)} onChange={() => toggleSelect(txn.id)} disabled={txn.submitted} /></td>
-                <td>{txn.id}</td>
-                <td>{txn.createdAt ? txn.createdAt.toLocaleString() : '—'}</td>
-                <td style={{ maxWidth: 160 }}>{txn.senderEmail}</td>
-                <td style={{ maxWidth: 180 }}>{txn.receiverEmail}</td>
-                <td>{txn.amount} {txn.currency}</td>
-                <td>{txn.provider}</td>
-                <td>{txn.accountInfo}</td>
-                <td>{txn.swiftCode}</td>
+              <tr key={transaction.id}>
+                <td style={smallCell}><input type="checkbox" checked={selectedIds.includes(transaction.id)} onChange={() => toggleSelect(transaction.id)} disabled={transaction.submitted} /></td>
+                <td style={{ ...smallCell, fontSize: 12 }}>{transaction.id}</td>
+                <td style={smallCell}>{transaction.createdAt ? transaction.createdAt.toLocaleString() : '—'}</td>
+                <td style={cellStyle}><div style={{ overflowWrap: 'break-word' }}>{transaction.senderEmail}</div></td>
+                <td style={cellStyle}><div style={{ overflowWrap: 'break-word' }}>{transaction.receiverEmail}</div></td>
+                <td style={smallCell}>{transaction.amount} {transaction.currency}</td>
+                <td style={cellStyle}><div style={{ overflowWrap: 'break-word' }}>{transaction.provider}</div></td>
+                <td style={{ maxWidth: 260, wordBreak: 'break-word', whiteSpace: 'normal', overflowWrap: 'break-word' }}><div>{transaction.accountInfo}</div></td>
+                <td style={smallCell}><div style={{ overflowWrap: 'break-word' }}>{transaction.swiftCode}</div></td>
                 <td style={{ color: st.color, fontWeight: 600 }}>{st.text}</td>
                 <td>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="btn btn-outline-primary btn-sm" onClick={() => checkRecord(txn)} disabled={isLoading}>
-                      {isLoading ? 'Checking...' : 'Check Account & SWIFT'}
-                    </button>
-                    <button className="btn btn-outline-success btn-sm" onClick={() => toggleVerify(txn)} disabled={isLoading || txn.submitted || !(txn.accountValid !== null && txn.swiftValid !== null)}>
-                      {txn.verified ? 'Un-verify' : 'Mark Verified'}
-                    </button>
-                    <button className="btn btn-primary btn-sm" onClick={() => submitToSwift(txn)} disabled={isLoading || txn.submitted || !txn.verified}>
-                      {isLoading ? 'Submitting...' : txn.submitted ? 'Submitted' : 'Submit to SWIFT'}
-                    </button>
-                  </div>
-                  <div style={{ marginTop: 6, color: txn.accountValid === false || txn.swiftValid === false ? 'red' : '#666' }}>
-                    {txn.accountValid === null ? 'Account: unchecked' : `Account: ${txn.accountValid ? 'OK' : 'Not found'}`} · {txn.swiftValid === null ? 'SWIFT: unchecked' : `SWIFT: ${txn.swiftValid ? 'OK' : 'Mismatch'}`}
-                    {txn.swiftResponse ? <div style={{ marginTop: 6, color: '#444' }}>SWIFT: {JSON.stringify(txn.swiftResponse)}</div> : null}
-                  </div>
+                  {transaction.submitted ? (
+                    <div style={{ color: 'green', fontWeight: 600 }}>Submitted to SWIFT</div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button className="btn btn-outline-primary btn-sm" onClick={() => checkRecord(transaction)} disabled={isLoading}>
+                        {isLoading ? 'Checking...' : 'Check Account & SWIFT'}
+                      </button>
+                      {transaction.verified ? (
+                        <button className="btn btn-outline-danger btn-sm" onClick={() => handleUnverify(transaction)} disabled={isLoading}>
+                          Un-verify
+                        </button>
+                      ) : (
+                        <button className="btn btn-outline-success btn-sm" onClick={() => handleMarkVerified(transaction)} disabled={isLoading || !(transaction.accountValid && transaction.swiftValid)}>
+                          Mark Verified
+                        </button>
+                      )}
+                      <button className="btn btn-primary btn-sm" onClick={() => submitToSwift(transaction)} disabled={isLoading || !transaction.verified}>
+                        {isLoading ? 'Submitting...' : 'Submit to SWIFT'}
+                      </button>
+                      <button className="btn btn-danger btn-sm" onClick={() => handleDelete(transaction)} disabled={isLoading} title="Delete this transaction from database">
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                  {st.text !== 'Submitted' && (
+                    <div style={{ marginTop: 6, color: transaction.accountValid === false || transaction.swiftValid === false ? 'red' : '#666', fontSize: 13 }}>
+                      {transaction.accountValid === null ? 'Account: unchecked' : `Account: ${transaction.accountValid ? 'OK' : 'Not found'}`} · {transaction.swiftValid === null ? 'SWIFT: unchecked' : `SWIFT: ${transaction.swiftValid ? 'OK' : 'Mismatch'}`}
+                      {transaction.swiftResponse ? <div style={{ marginTop: 6, color: '#444', fontSize: 12 }}>SWIFT: {JSON.stringify(transaction.swiftResponse)}</div> : null}
+                    </div>
+                  )}
                 </td>
               </tr>
             );

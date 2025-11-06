@@ -180,5 +180,105 @@ router.patch("/update-verification", authenticate, authorizeRoles("employee"), a
         });
     }
 });
+router.patch("/unverify", async (req, res) => {
+    try {
+        const { _id } = req.body;
+        if (!_id) {
+            return res.status(400).json({ message: "Missing _id in request body." });
+        }
+
+        const updatedPayment = await Payment.findByIdAndUpdate(
+            _id,
+            { verified: false, reason: "Unverified by employee" },
+            { new: true }
+        );
+
+        if (!updatedPayment) {
+            return res.status(404).json({ message: "Payment record not found." });
+        }
+
+        res.status(200).json({ message: "Payment unverified successfully.", payment: updatedPayment });
+    } catch (error) {
+        console.error("Error un-verifying payment:", error);
+        res.status(500).json({ message: "Server error while un-verifying payment.", error: error.message });
+    }
+});
+
+// PATCH /api/employeepayments/submit-to-swift
+router.patch("/submit-to-swift", authenticate, authorizeRoles("employee"), async (req, res) => {
+  try {
+    const { _id } = req.body;
+    if (!_id) {
+      return res.status(400).json({ message: "Missing _id in request body." });
+    }
+
+    const payment = await Payment.findById(_id);
+    if (!payment) {
+      return res.status(404).json({ message: "Payment not found." });
+    }
+
+    // Only allow submitting verified payments
+    if (!payment.verified) {
+      return res.status(400).json({ message: "Cannot submit unverified payment to SWIFT." });
+    }
+
+    payment.submitted = true;
+    payment.reason = "Submitted to SWIFT successfully.";
+    payment.swiftResponse = { status: "submitted", timestamp: new Date() };
+
+    const updated = await payment.save();
+
+    res.status(200).json({
+      message: "Payment successfully submitted to SWIFT.",
+      payment: updated,
+    });
+  } catch (error) {
+    console.error("Error submitting to SWIFT:", error);
+    res.status(500).json({
+      message: "Server error while submitting to SWIFT.",
+      error: error.message,
+    });
+  }
+});
+
+// DELETE /api/employeepayments/delete
+// Accepts body { _id } or query ?id=...
+router.delete("/delete", authenticate, authorizeRoles("employee"), async (req, res) => {
+  try {
+    const idFromQuery = req.query.id;
+    const { _id } = req.body || {};
+    const id = _id || idFromQuery;
+
+    if (!id) {
+      return res.status(400).json({ message: "Missing _id (or id query) in request." });
+    }
+
+    const deleted = await Payment.findByIdAndDelete(id);
+
+    if (!deleted) {
+      return res.status(404).json({ message: "Payment record not found." });
+    }
+
+    res.status(200).json({ message: "Payment deleted successfully.", payment: deleted });
+  } catch (error) {
+    console.error("Error deleting payment:", error);
+    res.status(500).json({ message: "Server error while deleting payment.", error: error.message });
+  }
+});
+
+// POST /delete-multiple (bulk delete)
+router.post("/delete-multiple", authenticate, authorizeRoles("employee"), async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: "Missing or invalid 'ids' array in request body." });
+    }
+    const result = await Payment.deleteMany({ _id: { $in: ids } });
+    res.status(200).json({ message: `Deleted ${result.deletedCount} record(s).`, deletedCount: result.deletedCount });
+  } catch (error) {
+    console.error("Error bulk deleting payments:", error);
+    res.status(500).json({ message: "Server error while deleting payments.", error: error.message });
+  }
+});
 
 module.exports = router;

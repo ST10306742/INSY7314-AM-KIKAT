@@ -14,6 +14,7 @@ const PaymentSchema = new mongoose.Schema({
   verified: { type: Boolean, default: false },
   reason: { type: String,required: true },
   createdAt: { type: Date, default: Date.now },
+    submitted: { type: Boolean, default: false }
 });
 
 

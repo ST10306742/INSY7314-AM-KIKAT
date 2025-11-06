@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 export default function PaymentPage() {
   const [receiverEmail, setReceiverEmail] = useState('');
   const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState('USD'); // default currency
+  const [currency, setCurrency] = useState('USD'); //default
   const [provider, setProvider] = useState('');
   const [accountInfo, setAccountInfo] = useState('');
   const [swiftCode, setSwiftCode] = useState('');
@@ -23,14 +23,16 @@ export default function PaymentPage() {
     }
   });
   const [senderEmail, setSenderEmail] = useState(() => user?.email || '');
-  const [loggedInAccountNumber, setAccountNumber] = useState(() => user?.accountNumber || '');
-  console.log("Logged in user:", user?.accountNumber, user?.username);
-  const [loggedInUsername, setUsername] = useState(() => user?.username || '');
+
+  //gets logged in user's account name and username from local storage
+  const loggedInAccountNumber = useState(() => user?.accountNumber || '');
+  const loggedInUsername = useState(() => user?.username || '');
 
   const currencies = [
     'USD','EUR','GBP','AUD','CAD','ZAR','JPY','CNY','INR','NZD','CHF','SGD','HKD'
   ];
 
+  // Progress bar handlers
   const startProgress = () => {
     setProgress(6);
     progressRef.current = setInterval(() => {
@@ -45,7 +47,7 @@ export default function PaymentPage() {
     setTimeout(() => setProgress(0), 600);
   };
 
-  // Combined payment function
+  //Combined payment function
   const handlePayment = async (e) => {
     e.preventDefault();
     if (loading) return;
@@ -53,13 +55,14 @@ export default function PaymentPage() {
     setStatus('');
     setStatusColor('');
 
-    // frontend validation
+    //frontend input validation only
     if (!senderEmail || !receiverEmail || !amount || !currency || !provider || !accountInfo || !swiftCode) {
       setStatus('All fields are required.');
       setStatusColor('red');
       return;
     }
 
+    //Regex
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(senderEmail) || !emailRegex.test(receiverEmail)) {
       setStatus('Please enter valid email addresses.');
@@ -67,6 +70,7 @@ export default function PaymentPage() {
       return;
     }
 
+    //JSON payload for backend to write to mongo
     const payload = { 
       username: loggedInUsername, 
       accountNumber: loggedInAccountNumber, 
@@ -82,17 +86,17 @@ export default function PaymentPage() {
       setLoading(true);
       startProgress();
 
-      // 1️⃣ Submit regular payment
-      const res = await axios.post('https://localhost:5001/api/payments', payload);
+      // Submit regular payment
+      const res = await axios.post('https://localhost:5001/api/payments', payload, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       setStatus(res.data?.message || 'Payment recorded');
       setStatusColor('green');
 
-      // 2️⃣ Then initiate PayFast payment
+      //Then initiate PayFast payment
       const payFastRes = await axios.post('https://localhost:5001/api/payfast/create', {
         amount,
         item_name: `Payment to ${receiverEmail}`,
         buyer_email: senderEmail,
-      });
+      }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
 
       if (payFastRes.data?.url) {
         setStatus('Redirecting to PayFast...');
@@ -130,6 +134,7 @@ export default function PaymentPage() {
     );
   }
 
+  //frontend UI
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: 32, gap: 24 }}>
       <div style={{
@@ -142,11 +147,12 @@ export default function PaymentPage() {
       }}>
         <h3 style={{ margin: 4, fontSize: 26 }}>International Payment</h3>
         <p style={{ marginTop: 8, marginBottom: 18, color: '#555' }}>
-          Enter the payment details below to complete your transaction.
+          Enter the payment details below to complete your transaction. If email is not entered, please refresh the page.
         </p>
 
         <form onSubmit={handlePayment} style={{ display: 'grid', gap: 14, width: '100%' }}>
-          <input className="form-control" type="email" placeholder="Sender Email"
+          {/* Disabled sender email field prefilled with logged in user's email */}
+          <input className="form-control" type="email" placeholder="Sender Email" disabled
             value={senderEmail} onChange={(e) => setSenderEmail(e.target.value)} />
           <input className="form-control" type="email" placeholder="Receiver Email"
             value={receiverEmail} onChange={(e) => setReceiverEmail(e.target.value)} disabled={loading} />

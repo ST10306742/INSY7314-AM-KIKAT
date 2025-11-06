@@ -2,12 +2,13 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
+const { authenticate, authorizeRoles } = require("../middleware/authMiddleware");
 const router = express.Router();
 const Payment = require("../models/Payment"); // We'll make this model next
 const User = require("../models/User");
 
 //  GET all employee payments filtered by verified status
-router.get("/getall", async (req, res) => {
+router.get("/getall", authenticate, authorizeRoles("employee"), async (req, res) => {
     try {
         // Read the filter from query params (example: /api/employeepayments?verified=true)
         const { verified } = req.query;
@@ -30,7 +31,7 @@ router.get("/getall", async (req, res) => {
 
 
 // POST verify account information
-router.post("/verify-account", async (req, res) => {
+router.post("/verify-account", authenticate, authorizeRoles("employee"), async (req, res) => {
     try {
         const { accountNumber, senderEmail, accountInfo, receiverEmail } = req.body;
 
@@ -98,7 +99,7 @@ try {
 
 
 // 🔹 POST /api/employeepayments/verify-swift
-router.post("/verify-swift", async (req, res) => {
+router.post("/verify-swift", authenticate, authorizeRoles("employee"), async (req, res) => {
   try {
     const { swiftCode } = req.body;
 
@@ -137,7 +138,7 @@ router.post("/verify-swift", async (req, res) => {
 
 
 // PATCH /api/employeepayments/update-verification
-router.patch("/update-verification", async (req, res) => {
+router.patch("/update-verification", authenticate, authorizeRoles("employee"), async (req, res) => {
     try {
         const { _id, accountsVerified, swiftCodeVerified } = req.body;
 

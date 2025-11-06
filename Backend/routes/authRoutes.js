@@ -1,8 +1,14 @@
 // Backend/routes/authRoutes.js
 const express = require("express");
 const router = express.Router();
+const jwt = require("jsonwebtoken");
+const dotenv = require("dotenv");
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
+
+dotenv.config();
+
+
 //const rateLimit = require("express-rate-limit"); 
 
 
@@ -82,50 +88,68 @@ router.post("/register", async (req, res) => {
 
 
 // Login Route
-router.post('/login', 
+router.post('/login',
   //loginLimiter
   async (req, res) => {
-  try {
-    const { username, accountNumber, password } = req.body;
+    try {
+      const { username, accountNumber, password } = req.body;
 
-    // Validate fields
-    if (!username || !password || !accountNumber) {
-      return res.status(400).json({ message: "Missing username, account number or password" });
-    }
+      // Validate fields
+      if (!username || !password || !accountNumber) {
+        return res.status(400).json({ message: "Missing username, account number or password" });
+      }
 
-    const user = await User.findOne({ accountNumber, username });
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+      const user = await User.findOne({ accountNumber, username });
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
 
-    // Compare passwords
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
+      // Compare passwords
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
 
-    if(user.role === null || user.role === undefined){
-      user.role = "user";
+      if (user.role === null || user.role === undefined) {
+        user.role = "user";
+      }
+
+
+      // Generate JWT
+      const token = jwt.sign(
+        { id: user._id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          username: user.username,
+          accountNumber: user.accountNumber,
+          idNumber: user.idNumber,
+          phoneNumber: user.phoneNumber,
+          role: user.role },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN || "1d" }
+      );
+
+
+      res.status(200).json({
+        message: "Login successful",
+        token,
+        user: {
+          id: user._id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          username: user.username,
+          accountNumber: user.accountNumber,
+          idNumber: user.idNumber,
+          phoneNumber: user.phoneNumber,
+          role: user.role
+        },
+      });
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({ message: "Server error during login" });
     }
-    
-    res.status(200).json({
-      message: "Login successful",
-      user: {
-        id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        username: user.username,
-        accountNumber: user.accountNumber,
-        idNumber: user.idNumber,
-        phoneNumber: user.phoneNumber,
-        role: user.role
-      },
-    });
-  } catch (error) {
-    console.error("Login error:", error);
-    res.status(500).json({ message: "Server error during login" });
-  }
-});
+  });
 
 module.exports = router;

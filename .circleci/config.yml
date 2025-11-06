@@ -1,121 +1,55 @@
-# This CircleCI configuration defines a Continuous Integration (CI) pipeline
-# that runs automated linting, testing, and Docker image builds for the project.
-# It uses version 2.1 (latest stable schema).
-
 version: 2.1
 
+orbs:
+  node: circleci/node@5.0.0
+
 jobs:
-  # -------------------------------
-  # JOB 1: BUILD AND TEST
-  # -------------------------------
-  build-and-test:
-    # Specify the environment CircleCI will use - Node.js 22 on Linux (Docker image)
+  test:
     docker:
-      - image: cimg/node:22.8
-
+      - image: cimg/node:18.17  # pick the node version you use
+    working_directory: ~/repo
     steps:
-      # Step 1: Pull the repository’s source code into the container
       - checkout
-
-      # Step 2: Display the current directory and confirm the folder structure.
-      # This helps verify the backend folder exists and files are in the expected place.
-      - run:
-          name: Show repo structure
-          command: |
-            pwd
-            ls -la
-            echo "---- Backend dir ----"
-            ls -la Backend || true
-
-      # Step 3: Restore previously cached dependencies to speed up builds.
-      # The checksum ensures cache invalidation if the package-lock.json file changes.
       - restore_cache:
           keys:
-            - node-deps-{{ checksum "Backend/package-lock.json" }}
-            - node-deps-
-
-      # Step 4: Install all backend dependencies (including dev tools like Jest & ESLint)
-      # Using `npm ci` ensures a clean, reproducible install from package-lock.json.
+            - v1-deps-{{ checksum "package-lock.json" }}
+            - v1-deps-
       - run:
-          name: Install Dependencies (include dev)
-          command: cd Backend && npm ci --include=dev
-
-      # Step 5: Save dependencies into CircleCI’s cache for future runs.
-      # This avoids reinstalling all packages from scratch next time.
+          name: Install dependencies
+          command: npm ci
       - save_cache:
-          key: node-deps-{{ checksum "Backend/package-lock.json" }}
           paths:
-            - ~/.npm
-
-      # Step 6: Run ESLint to check code quality and style consistency.
-      # The `|| true` prevents lint errors from failing the build - useful during setup.
+            - node_modules
+          key: v1-deps-{{ checksum "package-lock.json" }}
       - run:
-          name: Run ESLint
-          command: cd Backend && npx eslint . --ext .js,.jsx,.ts,.tsx || true
+          name: Run tests
+          command: npm test -- --ci --reporter=spec || true
+      - store_test_results:
+          path: test-results || test-results # adjust to your test output path
+      - store_artifacts:
+          path: ./coverage
+          destination: coverage
 
-      # Step 7: Run Jest unit tests.
-      # `--ci` ensures consistent output for CI environments.
-      # `--passWithNoTests` prevents the pipeline from failing if no test files exist yet.
-      - run:
-          name: Run Jest Tests (pass if no tests yet)
-          command: |
-            cd Backend
-            NODE_ENV=test npx jest --runInBand --ci --reporters=default --passWithNoTests
-
-
-  # -------------------------------
-  # JOB 2: DOCKER BUILD
-  # -------------------------------
-  docker-build:
+  build:
     docker:
-      - image: cimg/node:22.8
+      - image: cimg/node:18.17
+    working_directory: ~/repo
     steps:
-      # Step 1: Pull the latest version of the repository.
       - checkout
+      - restore_cache:
+          keys:
+            - v1-deps-{{ checksum "package-lock.json" }}
+      - run: npm run build
+      - persist_to_workspace:
+          root: .
+          paths:
+            - dist
 
-      # Step 2: Enable Docker-in-Docker so we can build container images inside CircleCI.
-      - setup_remote_docker:
-          docker_layer_caching: true  # speeds up subsequent Docker builds
-
-      # Step 3: Build the backend’s Docker image - but only if a Dockerfile exists.
-      # This prevents failures on branches that don’t contain Dockerfiles (like setup branches).
-      - run:
-          name: Build Docker image if Dockerfile exists
-          command: |
-            set -e  # Exit immediately if a command fails
-            cd Backend
-
-            # Check for Dockerfile or Dockerfile.dev, and build accordingly
-            if [ -f Dockerfile ]; then
-              echo "Found Dockerfile"; docker build -t secureblog-api .
-            elif [ -f Dockerfile.dev ]; then
-              echo "Found Dockerfile.dev"; docker build -f Dockerfile.dev -t secureblog-api .
-            else
-              echo "No Dockerfile in this branch. Skipping Docker build."
-              exit 0
-            fi
-
-            # Display all images to confirm the build succeeded
-            docker image ls | grep secureblog-api || true
-
-
-# -------------------------------
-# WORKFLOW CONFIGURATION
-# -------------------------------
 workflows:
-  version: 2.1  # Workflow syntax version (keep 2.1 for current CircleCI)
-  ci-pipeline:
+  version: 2
+  test_and_build:
     jobs:
-      # Run the build-and-test job first (always runs on every branch)
-      - build-and-test
-
-      # Run the Docker build only after the build-and-test job passes.
-      # The branch filter ensures Docker builds run only on the main branch,
-      # since that’s where your Dockerfiles exist.
-      - docker-build:
+      - test
+      - build:
           requires:
-            - build-and-test
-          filters:
-            branches:
-              only:
-                - main  # Only build/push Docker on main
+            - test

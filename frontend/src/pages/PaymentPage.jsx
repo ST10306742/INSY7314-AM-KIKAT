@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 export default function PaymentPage() {
   const [receiverEmail, setReceiverEmail] = useState('');
   const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState('USD'); // default currency
+  const [currency, setCurrency] = useState('USD'); //default
   const [provider, setProvider] = useState('');
   const [accountInfo, setAccountInfo] = useState('');
   const [swiftCode, setSwiftCode] = useState('');
@@ -23,6 +23,10 @@ export default function PaymentPage() {
     }
   });
   const [senderEmail, setSenderEmail] = useState(() => user?.email || '');
+
+  //gets logged in user's account name and username from local storage
+  const loggedInAccountNumber = useState(() => user?.accountNumber || '');
+  const loggedInUsername = useState(() => user?.username || '');
 
   const currencies = [
     'USD','EUR','GBP','AUD','CAD','ZAR','JPY','CNY','INR','NZD','CHF','SGD','HKD'
@@ -59,6 +63,7 @@ export default function PaymentPage() {
     setTimeout(() => setProgress(0), 600);
   };
 
+  //Combined payment function
   const handlePayment = async (e) => {
     e.preventDefault();
     if (loading) return;
@@ -66,12 +71,14 @@ export default function PaymentPage() {
     setStatus('');
     setStatusColor('');
 
+    //frontend input validation only
     if (!senderEmail || !receiverEmail || !amount || !currency || !provider || !accountInfo || !swiftCode) {
       setStatus('All fields are required.');
       setStatusColor('red');
       return;
     }
 
+    //Regex
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(senderEmail) || !emailRegex.test(receiverEmail)) {
       setStatus('Please enter valid email addresses.');
@@ -79,21 +86,31 @@ export default function PaymentPage() {
       return;
     }
 
-    const payload = { senderEmail, receiverEmail, amount, currency, provider, accountInfo, swiftCode };
+    //JSON payload for backend to write to mongo
+    const payload = { 
+      username: loggedInUsername, 
+      accountNumber: loggedInAccountNumber, 
+      senderEmail, 
+      receiverEmail, 
+      amount, 
+      currency, 
+      provider, 
+      accountInfo, 
+      swiftCode };
 
     try {
       setLoading(true);
       startProgress();
 
-      // 1️⃣ Submit regular payment
+      //Submit regular payment
       const res = await axios.post('https://localhost:5000/api/payments', payload);
       setStatus(res.data?.message || 'Payment recorded');
       setStatusColor('green');
 
-      // 2️⃣ Convert amount to ZAR for PayFast
+      //Convert amount to ZAR for PayFast
       const amountInZAR = (amount * (conversionRates[currency] || 1)).toFixed(2);
 
-      // 3️⃣ Initiate PayFast payment
+      //Initiate PayFast payment
       const payFastRes = await axios.post('https://localhost:5000/api/payfast/create', {
         amount: amountInZAR,
         item_name: `Payment to ${receiverEmail}`,
@@ -121,6 +138,28 @@ export default function PaymentPage() {
       }
 
       stopProgress(100);
+      // Submit regular payment
+      const res = await axios.post('https://localhost:5001/api/payments', payload, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      setStatus(res.data?.message || 'Payment recorded');
+      setStatusColor('green');
+
+      //Then initiate PayFast payment
+      const payFastRes = await axios.post('https://localhost:5001/api/payfast/create', {
+        amount,
+        item_name: `Payment to ${receiverEmail}`,
+        buyer_email: senderEmail,
+      }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+
+      if (payFastRes.data?.url) {
+        setStatus('Redirecting to PayFast...');
+        setStatusColor('green');
+        window.open(payFastRes.data.url, '_blank', 'noopener,noreferrer');
+      } else {
+        console.warn('No PayFast URL returned.');
+      }
+
+      stopProgress(100);
+      setTimeout(() => nav('/payment-success', { state: payload }), 400);
     } catch (err) {
       stopProgress(100);
       const errorMessage = err.response?.data?.message || err.message || 'Failed to process payment';
@@ -140,6 +179,7 @@ export default function PaymentPage() {
     );
   }
 
+  //frontend UI
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: 32, gap: 24 }}>
       <div style={{
@@ -152,11 +192,12 @@ export default function PaymentPage() {
       }}>
         <h3 style={{ margin: 4, fontSize: 26 }}>International Payment</h3>
         <p style={{ marginTop: 8, marginBottom: 18, color: '#555' }}>
-          Enter the payment details below to complete your transaction.
+          Enter the payment details below to complete your transaction. If email is not entered, please refresh the page.
         </p>
 
         <form onSubmit={handlePayment} style={{ display: 'grid', gap: 14, width: '100%' }}>
-          <input className="form-control" type="email" placeholder="Sender Email"
+          {/* Disabled sender email field prefilled with logged in user's email */}
+          <input className="form-control" type="email" placeholder="Sender Email" disabled
             value={senderEmail} onChange={(e) => setSenderEmail(e.target.value)} />
           <input className="form-control" type="email" placeholder="Receiver Email"
             value={receiverEmail} onChange={(e) => setReceiverEmail(e.target.value)} disabled={loading} />

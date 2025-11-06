@@ -60,7 +60,6 @@ router.post('/create', async (req, res) => {
       message: 'PayFast sandbox link generated successfully.',
       url: pfUrl,
     });
-
   } catch (err) {
     console.error('PayFast error:', err);
 

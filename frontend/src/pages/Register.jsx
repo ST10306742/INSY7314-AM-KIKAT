@@ -37,7 +37,7 @@ const [firstName, setFirstName] = useState('');
 
     try {
       // try backend first
-      const res = await axios.post('https://localhost:5000/api/auth/register', payload);
+      const res = await axios.post('https://localhost:5001/api/auth/register', payload);
       setStatus(res.data?.message ?? 'Registered successfully');
       nav('/login');
     } catch (err) {

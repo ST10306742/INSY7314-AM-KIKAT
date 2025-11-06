@@ -31,7 +31,7 @@ export default function App() {
 
   // backend test connectivity check
   useEffect(() => {
-    axios.get('https://localhost:5000/test')
+    axios.get('https://localhost:5001/test')
       .then(res => setTestMsg(res.data?.message ?? ''))
       .catch(() => {
         // fallback if localhost test fails
@@ -71,9 +71,14 @@ export default function App() {
                 style={{ display: 'flex', gap: 12, alignItems: 'center' }}
                 >
                 {/* Only show Payments link if user is logged in */}
-                {user && (
+                {user?.role === 'user' && (
                   <li className="nav-item">
                     <Link className="nav-link text-white" to="/payments">Payments</Link>
+                  </li>
+                )}
+                {user?.role === 'employee' && (
+                  <li className="nav-item">
+                    <Link className="nav-link text-white" to="/employee-payments">Employee Payments</Link>
                   </li>
                 )}
               </ul>
@@ -122,7 +127,10 @@ export default function App() {
           <Route path="/login" element={<Login onLogin={handleLogin} />} />
           {/* Payments page is now accessible without login */}
           <Route path="/payments" element={<Payments user={user} />} />
-          <Route path="/employee-payments" element={<EmployeePayments />} />
+          <Route
+            path="/employee-payments"
+            element={user?.role === 'employee' ? <EmployeePayments /> : <Login onLogin={handleLogin} />}
+          />
 
         </Routes>
       </main>

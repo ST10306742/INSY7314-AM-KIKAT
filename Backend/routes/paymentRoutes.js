@@ -1,6 +1,7 @@
 // Backend/routes/paymentRoutes.js
 const express = require('express');
 const router = express.Router();
+const { authenticate, authorizeRoles } = require("../middleware/authMiddleware");
 const Payment = require('../models/Payment');
 const sendTransactionEmails = require('../services/emailService');
 
@@ -28,7 +29,7 @@ function validateWhitelist(field, value) {
 }
 
 // Payment Route
-router.post('/', async (req, res) => {
+router.post('/', authenticate, authorizeRoles("user"), async (req, res) => {
   try {
     const {
       username,
@@ -41,6 +42,8 @@ router.post('/', async (req, res) => {
       senderEmail,
       receiverEmail,
     } = req.body;
+
+    console.log('Received payment request:', req.body);
 
     // Sanitize all fields
     const sanitized = {

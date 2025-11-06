@@ -113,11 +113,11 @@ mongoose
 const server = https.createServer(options, app);
 
 server.on('secureConnection', (tlsSocket) => {
-  console.log(`🔐 Client connected using TLS version: ${tlsSocket.getProtocol()}`);
+  console.log(`Client connected using TLS version: ${tlsSocket.getProtocol()}`);
 });
 
 server.listen(PORT, () => {
-  console.log(`✅ Secure API running at https://localhost:${PORT}`);
+  console.log(`Secure API running at https://localhost:${PORT}`);
   console.log(`Frontend URL allowed: ${FRONTEND_URL}`);
   console.log(`CSP mode: ${isProd ? 'ENFORCED' : 'REPORT-ONLY'}`);
 });

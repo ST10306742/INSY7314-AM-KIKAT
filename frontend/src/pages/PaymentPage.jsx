@@ -25,8 +25,9 @@ export default function PaymentPage() {
   const [senderEmail, setSenderEmail] = useState(() => user?.email || '');
 
   //gets logged in user's account name and username from local storage
-  const loggedInAccountNumber = useState(() => user?.accountNumber || '');
-  const loggedInUsername = useState(() => user?.username || '');
+  const [loggedInAccountNumber, setLoggedInAccountNumber] = useState(() => user?.accountNumber || '');
+  const [loggedInUsername, setLoggedInUsername] = useState(() => user?.username || '');
+  console.log("User name and account number:", loggedInUsername, loggedInAccountNumber);
 
   const currencies = [
     'USD','EUR','GBP','AUD','CAD','ZAR','JPY','CNY','INR','NZD','CHF','SGD','HKD'
@@ -90,32 +91,35 @@ export default function PaymentPage() {
     const payload = { 
       username: loggedInUsername, 
       accountNumber: loggedInAccountNumber, 
-      senderEmail, 
-      receiverEmail, 
       amount, 
       currency, 
       provider, 
-      accountInfo, 
-      swiftCode };
+      accountInfo,
+      swiftCode,
+      senderEmail, 
+      receiverEmail,   
+    };
+
+    console.log("Payment payload:", JSON.stringify(payload));
 
     try {
       setLoading(true);
       startProgress();
 
-      //Submit regular payment
-      const res = await axios.post('https://localhost:5000/api/payments', payload);
+      // Submit regular payment
+      const res = await axios.post('https://localhost:5001/api/payments', payload, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       setStatus(res.data?.message || 'Payment recorded');
       setStatusColor('green');
 
       //Convert amount to ZAR for PayFast
       const amountInZAR = (amount * (conversionRates[currency] || 1)).toFixed(2);
 
-      //Initiate PayFast payment
-      const payFastRes = await axios.post('https://localhost:5000/api/payfast/create', {
+      //Then initiate PayFast payment
+      const payFastRes = await axios.post('https://localhost:5001/api/payfast/create', {
         amount: amountInZAR,
         item_name: `Payment to ${receiverEmail}`,
         buyer_email: senderEmail,
-      });
+      }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
 
       if (payFastRes.data?.url) {
         setStatus('Opening PayFast in a new tab...');
@@ -136,29 +140,8 @@ export default function PaymentPage() {
         setStatus('Failed to get PayFast link.');
         setStatusColor('red');
       }
-
       stopProgress(100);
-      // Submit regular payment
-      const res = await axios.post('https://localhost:5001/api/payments', payload, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-      setStatus(res.data?.message || 'Payment recorded');
-      setStatusColor('green');
 
-      //Then initiate PayFast payment
-      const payFastRes = await axios.post('https://localhost:5001/api/payfast/create', {
-        amount,
-        item_name: `Payment to ${receiverEmail}`,
-        buyer_email: senderEmail,
-      }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-
-      if (payFastRes.data?.url) {
-        setStatus('Redirecting to PayFast...');
-        setStatusColor('green');
-        window.open(payFastRes.data.url, '_blank', 'noopener,noreferrer');
-      } else {
-        console.warn('No PayFast URL returned.');
-      }
-
-      stopProgress(100);
       setTimeout(() => nav('/payment-success', { state: payload }), 400);
     } catch (err) {
       stopProgress(100);

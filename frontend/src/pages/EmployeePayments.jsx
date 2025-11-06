@@ -195,10 +195,33 @@ export default function EmployeePayments() {
     }
     setLoading(transaction.id, true);
     try {
-      const res = await persistVerification(transaction);
-      const updated = res.payment;
-      updateTransaction(transaction.id, { submitted: true, swiftResponse: updated.swiftResponse, reason: updated.reason });
-      showStatus('success', res.message || 'Payment submitted to SWIFT.');
+      // Ensure verification persisted first
+      await axios.patch(
+        'https://localhost:5001/api/employeepayments/update-verification',
+        {
+          _id: transaction.id,
+          accountsVerified: !!transaction.accountValid,
+          swiftCodeVerified: !!transaction.swiftValid
+        },
+        { headers: authHeaders }
+      );
+
+      // Now call submit-to-swift to mark submitted + set swiftResponse on the server
+      const res = await axios.patch(
+        'https://localhost:5001/api/employeepayments/submit-to-swift',
+        { _id: transaction.id },
+        { headers: authHeaders }
+      );
+
+      const updated = res.data.payment;
+      updateTransaction(transaction.id, {
+        submitted: !!updated.submitted,
+        swiftResponse: updated.swiftResponse || transaction.swiftResponse,
+        reason: updated.reason || transaction.reason,
+        verified: !!updated.verified
+      });
+
+      showStatus('success', res.data.message || 'Payment submitted to SWIFT.');
     } catch (err) {
       const errMsg = err.response?.data?.message || err.message || 'Failed to submit to SWIFT';
       showStatus('error', errMsg);
@@ -261,13 +284,32 @@ export default function EmployeePayments() {
     for (const t of toSubmit) {
       setLoading(t.id, true);
       try {
-        const persistRes = await persistVerification(t);
-        const updatedPayment = persistRes.payment;
-        updateTransaction(t.id, { verified: !!updatedPayment.verified, submitted: !!updatedPayment.submitted || true, createdAt: updatedPayment.createdAt ? new Date(updatedPayment.createdAt) : t.createdAt });
-        showStatus('success', `Persisted ${t.id}`);
+        // persist verification first
+        await axios.patch(
+          'https://localhost:5001/api/employeepayments/update-verification',
+          { _id: t.id, accountsVerified: !!t.accountValid, swiftCodeVerified: !!t.swiftValid },
+          { headers: authHeaders }
+        );
+
+        // then submit to SWIFT
+        const res = await axios.patch(
+          'https://localhost:5001/api/employeepayments/submit-to-swift',
+          { _id: t.id },
+          { headers: authHeaders }
+        );
+
+        const updatedPayment = res.data.payment;
+        updateTransaction(t.id, {
+          verified: !!updatedPayment.verified,
+          submitted: !!updatedPayment.submitted,
+          swiftResponse: updatedPayment.swiftResponse || null,
+          createdAt: updatedPayment.createdAt ? new Date(updatedPayment.createdAt) : t.createdAt
+        });
+
+        showStatus('success', `Submitted ${t.id}`);
       } catch (err) {
         updateTransaction(t.id, { submitted: false });
-        const errMsg = err.response?.data?.message || err.message || `Failed to persist ${t.id}`;
+        const errMsg = err.response?.data?.message || err.message || `Failed to submit ${t.id}`;
         showStatus('error', errMsg);
       } finally {
         setLoading(t.id, false);
@@ -275,7 +317,7 @@ export default function EmployeePayments() {
     }
 
     setSelectedIds([]);
-    showStatus('success', `Marked ${toSubmit.length} transaction(s) verified/submitted.`);
+    showStatus('success', `Submitted ${toSubmit.length} transaction(s).`);
   };
 
   //Bulk delete backend call
@@ -285,11 +327,11 @@ export default function EmployeePayments() {
   };
 
   const deletePaymentBackend = async (transactionId) => {
-    const res = await axios.delete('https://localhost:5001/api/employeepayments/delete', {
-      headers: authHeaders,
-      data: { _id: transactionId },
-      timeout: 20000
-    });
+    // send id in query string because some servers/apps don't parse DELETE bodies reliably
+    const res = await axios.delete(
+      `https://localhost:5001/api/employeepayments/delete?id=${encodeURIComponent(transactionId)}`,
+      { headers: authHeaders, timeout: 20000 }
+    );
     return res.data;
   };
 

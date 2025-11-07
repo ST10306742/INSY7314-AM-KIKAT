@@ -12,7 +12,7 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const payfastRoutes = require('./routes/payfast');
 const authRoutes = require("./routes/authRoutes");
 const employeePaymentsRoutes = require('./routes/employeePaymentsRoutes');
-//const generalLimiter = require('./middleware/rateLimiter');
+const generalLimiter = require('./middleware/rateLimiter');
 
 dotenv.config();
 
@@ -80,7 +80,7 @@ app.use(
 );
 
 // Rate Limiting
-//app.use(generalLimiter);
+app.use(generalLimiter);
 
 
 // Routes
